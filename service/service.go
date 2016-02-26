@@ -90,7 +90,7 @@ func (s *Service) configLoop() {
 		currentChangeCounter := atomic.LoadUint32(&s.changeCounter)
 		if currentChangeCounter > lastChangeCounter {
 			if err := s.updateHaproxy(); err != nil {
-				s.Logger.Error("Failed to update haproxy: %#v", err)
+				s.Logger.Errorf("Failed to update haproxy: %#v", err)
 			} else {
 				// Success
 				lastChangeCounter = currentChangeCounter
@@ -107,7 +107,7 @@ func (s *Service) configLoop() {
 func (s *Service) backendMonitorLoop() {
 	for {
 		if err := s.Backend.Watch(); err != nil {
-			s.Logger.Error("Failed to watch for backend changes: %#v", err)
+			s.Logger.Errorf("Failed to watch for backend changes: %#v", err)
 		}
 		s.TriggerUpdate()
 	}
@@ -136,14 +136,14 @@ func (s *Service) updateHaproxy() error {
 
 	// Validate the config
 	if err := s.validateConfig(tempConf); err != nil {
-		s.Logger.Error("haproxy config validation failed: %#v", err)
+		s.Logger.Errorf("haproxy config validation failed: %#v", err)
 		return maskAny(err)
 	}
 
 	// Move config to correct place
 	os.Remove(s.HaproxyConfPath)
 	if err := ioutil.WriteFile(s.HaproxyConfPath, []byte(config), confPerm); err != nil {
-		s.Logger.Error("Cannot copy haproxy config to %s: %#v", s.HaproxyConfPath, err)
+		s.Logger.Errorf("Cannot copy haproxy config to %s: %#v", s.HaproxyConfPath, err)
 		return maskAny(err)
 	}
 
@@ -185,9 +185,9 @@ func (s *Service) createConfigFile() (string, string, error) {
 	}
 
 	// Log services
-	s.Logger.Info("Found %d services", len(services))
+	s.Logger.Infof("Found %d services", len(services))
 	for srvIndex, srv := range services {
-		s.Logger.Debug("Service %d: %#v", srvIndex, srv)
+		s.Logger.Debugf("Service %d: %#v", srvIndex, srv)
 	}
 
 	// Create temp file first
@@ -207,7 +207,7 @@ func (s *Service) validateConfig(confPath string) error {
 	cmd := exec.Command(s.HaproxyPath, "-c", "-f", confPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		s.Logger.Error("Error in haproxy config: %s", string(output))
+		s.Logger.Errorf("Error in haproxy config: %s", string(output))
 		return maskAny(err)
 	}
 	return nil
@@ -223,14 +223,14 @@ func (s *Service) restartHaproxy() error {
 		args = append(args, "-sf", strconv.Itoa(s.lastPid))
 	}
 
-	s.Logger.Debug("Starting haproxy with %#v", args)
+	s.Logger.Debugf("Starting haproxy with %#v", args)
 	cmd := exec.Command(s.HaproxyPath, args...)
 	configureRestartHaproxyCmd(cmd)
 	cmd.Stdin = bytes.NewReader([]byte{})
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		s.Logger.Error("Failed to start haproxy: %#v", err)
+		s.Logger.Errorf("Failed to start haproxy: %#v", err)
 		return maskAny(err)
 	}
 
@@ -240,14 +240,14 @@ func (s *Service) restartHaproxy() error {
 		pid = proc.Pid
 	}
 	s.lastPid = pid
-	s.Logger.Debug("haxproxy pid %d started", pid)
+	s.Logger.Debugf("haxproxy pid %d started", pid)
 
 	go func() {
 		// Wait for haproxy to terminate so we avoid defunct processes
 		if err := cmd.Wait(); err != nil {
-			s.Logger.Error("haproxy pid %d wait returned an error: %#v", pid, err)
+			s.Logger.Errorf("haproxy pid %d wait returned an error: %#v", pid, err)
 		} else {
-			s.Logger.Debug("haproxy pid %d terminated", pid)
+			s.Logger.Debugf("haproxy pid %d terminated", pid)
 		}
 	}()
 
@@ -261,7 +261,7 @@ func (s *Service) close() {
 		s.exitProcess()
 	}
 
-	s.Logger.Info("shutting down server in %s", osExitDelay.String())
+	s.Logger.Infof("shutting down server in %s", osExitDelay.String())
 	time.Sleep(osExitDelay)
 
 	s.exitProcess()
@@ -285,7 +285,7 @@ func (s *Service) listenSignals() {
 	for {
 		select {
 		case sig := <-c:
-			s.Logger.Info("server received signal %s", sig)
+			s.Logger.Infof("server received signal %s", sig)
 			go s.close()
 		}
 	}
