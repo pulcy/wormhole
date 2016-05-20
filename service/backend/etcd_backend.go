@@ -26,11 +26,16 @@ import (
 	"golang.org/x/net/context"
 )
 
+const (
+	recentWatchErrorsMax = 5
+)
+
 type etcdBackend struct {
-	client     client.Client
-	watcher    client.Watcher
-	Logger     *logging.Logger
-	serviceKey string
+	client            client.Client
+	watcher           client.Watcher
+	Logger            *logging.Logger
+	serviceKey        string
+	recentWatchErrors int
 }
 
 func NewEtcdBackend(logger *logging.Logger, uri *url.URL) (Backend, error) {
@@ -44,11 +49,11 @@ func NewEtcdBackend(logger *logging.Logger, uri *url.URL) (Backend, error) {
 	if err != nil {
 		return nil, maskAny(err)
 	}
-	kAPI := client.NewKeysAPI(c)
+	keysAPI := client.NewKeysAPI(c)
 	options := &client.WatcherOptions{
 		Recursive: true,
 	}
-	watcher := kAPI.Watcher(uri.Path, options)
+	watcher := keysAPI.Watcher(uri.Path, options)
 	return &etcdBackend{
 		client:     c,
 		watcher:    watcher,
@@ -59,10 +64,20 @@ func NewEtcdBackend(logger *logging.Logger, uri *url.URL) (Backend, error) {
 
 // Watch for changes on a path and return where there is a change.
 func (eb *etcdBackend) Watch() error {
+	if eb.watcher == nil || eb.recentWatchErrors > recentWatchErrorsMax {
+		eb.recentWatchErrors = 0
+		keysAPI := client.NewKeysAPI(eb.client)
+		options := &client.WatcherOptions{
+			Recursive: true,
+		}
+		eb.watcher = keysAPI.Watcher(eb.serviceKey, options)
+	}
 	_, err := eb.watcher.Next(context.Background())
 	if err != nil {
+		eb.recentWatchErrors++
 		return maskAny(err)
 	}
+	eb.recentWatchErrors = 0
 	return nil
 }
 
@@ -84,12 +99,12 @@ func (eb *etcdBackend) Get() (ServiceRegistrations, error) {
 
 // Load all registered service instances
 func (eb *etcdBackend) readInstancesTree() (map[int]ServiceInstances, error) {
-	kAPI := client.NewKeysAPI(eb.client)
+	keysAPI := client.NewKeysAPI(eb.client)
 	options := &client.GetOptions{
 		Recursive: true,
 		Sort:      false,
 	}
-	resp, err := kAPI.Get(context.Background(), eb.serviceKey, options)
+	resp, err := keysAPI.Get(context.Background(), eb.serviceKey, options)
 	if err != nil {
 		return nil, maskAny(err)
 	}
