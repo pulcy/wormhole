@@ -205,9 +205,12 @@ func (s *Service) createConfigFile() (string, string, error) {
 // validateConfig calls haproxy to validate the given config file.
 func (s *Service) validateConfig(confPath string) error {
 	cmd := exec.Command(s.HaproxyPath, "-c", "-f", confPath)
-	output, err := cmd.CombinedOutput()
+	cmd.Stdin = bytes.NewReader([]byte{})
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
 	if err != nil {
-		s.Logger.Errorf("Error in haproxy config: %s", string(output))
+		s.Logger.Errorf("Error in haproxy config: %#v", err)
 		return maskAny(err)
 	}
 	return nil
