@@ -19,6 +19,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/coreos/etcd/client"
 	"github.com/op/go-logging"
@@ -51,6 +52,9 @@ func NewEtcdBackend(logger *logging.Logger, endpoints []string, path string) (Ba
 		Recursive: true,
 	}
 	watcher := keysAPI.Watcher(path, options)
+
+	go c.AutoSync(context.Background(), time.Second*30)
+
 	return &etcdBackend{
 		client:     c,
 		watcher:    watcher,
