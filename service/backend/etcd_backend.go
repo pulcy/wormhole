@@ -16,7 +16,6 @@ package backend
 
 import (
 	"fmt"
-	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -38,12 +37,10 @@ type etcdBackend struct {
 	recentWatchErrors int
 }
 
-func NewEtcdBackend(logger *logging.Logger, uri *url.URL) (Backend, error) {
+func NewEtcdBackend(logger *logging.Logger, endpoints []string, path string) (Backend, error) {
 	cfg := client.Config{
 		Transport: client.DefaultTransport,
-	}
-	if uri.Host != "" {
-		cfg.Endpoints = append(cfg.Endpoints, "http://"+uri.Host)
+		Endpoints: endpoints,
 	}
 	c, err := client.New(cfg)
 	if err != nil {
@@ -53,11 +50,11 @@ func NewEtcdBackend(logger *logging.Logger, uri *url.URL) (Backend, error) {
 	options := &client.WatcherOptions{
 		Recursive: true,
 	}
-	watcher := keysAPI.Watcher(uri.Path, options)
+	watcher := keysAPI.Watcher(path, options)
 	return &etcdBackend{
 		client:     c,
 		watcher:    watcher,
-		serviceKey: uri.Path,
+		serviceKey: path,
 		Logger:     logger,
 	}, nil
 }

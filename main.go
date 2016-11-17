@@ -47,6 +47,8 @@ var (
 	flags struct {
 		logLevel        string
 		etcdAddr        string
+		etcdEndpoints   []string
+		etcdPath        string
 		haproxyConfPath string
 	}
 )
@@ -56,6 +58,8 @@ func init() {
 
 	cmdMain.Flags().StringVar(&flags.logLevel, "log-level", defaultLogLevel, "Log level (debug|info|warning|error)")
 	cmdMain.Flags().StringVar(&flags.etcdAddr, "etcd-addr", "", "Address of etcd backend")
+	cmdMain.Flags().StringSliceVar(&flags.etcdEndpoints, "etcd-endpoint", nil, "Etcd client endpoints")
+	cmdMain.Flags().StringVar(&flags.etcdPath, "etcd-path", "", "Path into etcd namespace")
 	cmdMain.Flags().StringVar(&flags.haproxyConfPath, "haproxy-conf", "/data/config/haproxy.cfg", "Path of haproxy config file")
 }
 
@@ -65,12 +69,13 @@ func main() {
 
 func cmdMainRun(cmd *cobra.Command, args []string) {
 	// Parse arguments
-	if flags.etcdAddr == "" {
-		Exitf("Please specify --etcd-addr")
-	}
-	etcdUrl, err := url.Parse(flags.etcdAddr)
-	if err != nil {
-		Exitf("--etcd-addr '%s' is not valid: %#v", flags.etcdAddr, err)
+	if flags.etcdAddr != "" {
+		etcdUrl, err := url.Parse(flags.etcdAddr)
+		if err != nil {
+			Exitf("--etcd-addr '%s' is not valid: %#v", flags.etcdAddr, err)
+		}
+		flags.etcdEndpoints = []string{fmt.Sprintf("%s://%s", etcdUrl.Scheme, etcdUrl.Host)}
+		flags.etcdPath = etcdUrl.Path
 	}
 
 	// Set log level
@@ -81,7 +86,7 @@ func cmdMainRun(cmd *cobra.Command, args []string) {
 	logging.SetLevel(level, projectName)
 
 	// Prepare backend
-	backend, err := backend.NewEtcdBackend(log, etcdUrl)
+	backend, err := backend.NewEtcdBackend(log, flags.etcdEndpoints, flags.etcdPath)
 	if err != nil {
 		Exitf("Failed to backend: %#v", err)
 	}
